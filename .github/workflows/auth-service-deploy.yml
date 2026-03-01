@@ -1,0 +1,59 @@
+name: Deploy Auth service to ECS
+on:
+  push:
+    branches:
+      - main
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REPOSITORY: banking-services
+  ECS_SERVICE: auth-service
+  ECS_CLUSTER: BankingAppClusters
+  TASK_DEFINITION: auth-service
+
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configuration AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+         role-to-assume: arn:aws:iam::021034520755:role/github-action-ecs-role
+         aws-region: ${{env.AWS_REGION}}
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker Image
+        run: |
+          docker build -t $ECR_REPOSITORY .
+          docker tag $ECR_REPOSITORY:latest \
+          021034520755.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPOSITORY:latest
+      - name: Download Task Definition
+        run: |
+          aws ecs describe-task-definition \
+          --task-definition $TASK_DEFINITION \
+          --query- taskDefinition \
+          > task-definition.json
+      - name: Update Task Definition Image
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: auth-service
+          image: 021034520755.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPOSITORY:latest
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          service: ${{env.ECS_SERVICE}}
+          cluster: ${{env.ECS_CLUSTER}}
+          wait-for-service-stability: true
+
+
