@@ -1,60 +1,96 @@
 name: Deploy Auth service to ECS
+
 on:
   push:
     branches:
       - main
+
 env:
   AWS_REGION: ap-southeast-2
   ECR_REPOSITORY: banking-services
   ECS_SERVICE: auth-service
   ECS_CLUSTER: BankingAppClusters
   TASK_DEFINITION: auth-service
+  ACCOUNT_ID: 021034520755
 
 permissions:
   id-token: write
   contents: read
+
 jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configuration AWS Credentials
+
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-         role-to-assume: arn:aws:iam::021034520755:role/github-action-ecs-role
-         aws-region: ${{env.AWS_REGION}}
+          role-to-assume: arn:aws:iam::021034520755:role/github-action-ecs-role
+          aws-region: ${{ env.AWS_REGION }}
+
+
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
+
 
       - name: Build Docker Image
         run: |
           cd auth-service
           docker build -t $ECR_REPOSITORY .
+
           docker tag $ECR_REPOSITORY:latest \
-          021034520755.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPOSITORY:latest
+          $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
+
+
+      - name: Push Docker Image to ECR
+        run: |
+          docker push \
+          $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
+
+
       - name: Download Task Definition
         run: |
           aws ecs describe-task-definition \
           --task-definition $TASK_DEFINITION \
           --query taskDefinition \
           > task-definition.json
+
+
+      - name: Clean Task Definition
+        run: |
+          cat task-definition.json | jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy,
+            .enableFaultInjection
+          )' > task-definition-clean.json
+
+          mv task-definition-clean.json task-definition.json
+
+
       - name: Update Task Definition Image
+        id: render-task
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
           container-name: auth-service
-          image: 021034520755.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPOSITORY:latest
+          image: $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
+
 
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: task-definition.json
-          service: ${{env.ECS_SERVICE}}
-          cluster: ${{env.ECS_CLUSTER}}
+          task-definition: ${{ steps.render-task.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
-
-
