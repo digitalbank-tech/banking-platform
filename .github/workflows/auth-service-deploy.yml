@@ -48,12 +48,6 @@ jobs:
           $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
 
 
-      - name: Push Docker Image to ECR
-        run: |
-          docker push \
-          $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
-
-
       - name: Download Task Definition
         run: |
           aws ecs describe-task-definition \
