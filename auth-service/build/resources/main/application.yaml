@@ -1,4 +1,8 @@
 spring:
+  security:
+    user:
+      name: admin
+      password: admin123
   datasource:
     url: jdbc:h2:mem:authdb
     driver-class-name: org.h2.Driver
@@ -12,5 +16,7 @@ spring:
     name: auth-service
 server:
   port: 8081
+
+
 
 
